@@ -1,5 +1,7 @@
 module QuantEconTools
 
-greet() = print("Hello World!")
+export plusTwo
 
-end # module QuantEconTools
+plusTwo(x) = return x+2
+
+end # end module
