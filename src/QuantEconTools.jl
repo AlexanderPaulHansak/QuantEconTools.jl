@@ -1,8 +1,8 @@
 module QuantEconTools
 
 export 
-# Markov functionality
-tauchen, rouwenhorst, inv_dist
+    # Markov functionality
+    tauchen, rouwenhorst, inv_dist
 
 include("MarkovApprox.jl")
 
