@@ -1,7 +1,9 @@
 module QuantEconTools
 
-export plusTwo
+export 
+# Markov functionality
+tauchen, rouwenhorst, inv_dist
 
-plusTwo(x) = return x+2
+include("MarkovApprox.jl")
 
 end # end module
