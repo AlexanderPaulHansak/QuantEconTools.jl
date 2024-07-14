@@ -1,155 +1,161 @@
 #=
-Various routines to discretize AR(1) processes
+Various routines for discretizing and working with AR(1) processes
 
 @author : Alexander Hansak <alexander.hansak@cerge-ei.cz>
 
-@date : 2024-04-10 23:55:05
+@date : 2024-07-10 14:14:05
 
 =#
 
 
 import Distributions: cdf, Normal
-import LinearAlgebra: eigvecs, eigvals
+import LinearAlgebra: I
 
+@inline is_stochastic(P) = maximum(abs, sum(P, dims = 2) .- 1) < 5e-15 ? true : false
 
 """
-    MarkovApprox(ρ,σ,m,N,Method)
+Implements Tauchen's (1996) method for approximating AR(1) process with finite markov chain
 
-Returns transition matrix, invariant distribution and discretized vector for approximating AR(1) process with either Tauchen (1986) or Rouwenhorst (1995)
+The process follows
 
-# Examples
-```julia-repl
-julia> MarkovApprox(0.5,1,3,3,0).s
--3.4641016151377544:3.4641016151377544:3.4641016151377544
-
-julia> MarkovApprox(0.5,1,3,3,0).Π
-3×3 Matrix{Float64}:
- 0.5          0.499734  0.000266003
- 0.0416323    0.916735  0.0416323
- 0.000266003  0.499734  0.5
-
-julia> MarkovApprox(0.5,1,3,3,0).InvD
-3-element Vector{Float64}:
- 0.3082000863921907
- 0.3835998272156185
- 0.3082000863921907
+```math
+    y_t = ρ y_{t-1} + ε_t
 ```
-"""
-function tauchen(ρ,σ,m,N)
-    #= 
-    Implements Tauchen's (1986) or Rouwenhorst's (1995)
-    method to discretize the first-order 
-    autoregressive process 
-                               y_t = ρ * y_(t-1) + u_t
-    with a Markov chain.
-    
-    u_t is Gaussian white noise with standard deviation σ.
-    
-    ----------------------------------------------------------------------------------------
-    INPUT:  ρ   autocorrelations coefficient
-            σ   tandard deviation of Gaussian white noise
-            m   width of discretized state space (ymax=m*vary ymin=-m*vary, Tauchen uses m=3) 
-            N   number of possible states to approximate y_t (usually N=9 should be fine)
-    
-    OUTPUT: Π   the transition matrix of the Markov chain
-            s   the discretized state space of y_t
-    -----------------------------------------------------------------------------------------
-    =#
 
-    # Check if abs(ρ)<1 
-    if abs(ρ)>=1
-        error("The persistence parameter, ρ, must be less than one in absolute value.")
-    end
+where ``ε_t ∼ N (0,σ^2)``
+
+##### Arguments
+
+- `ρ::Real` : Persistence parameter in AR(1) process
+- `σ::Real` : Standard deviation of random component of AR(1) process
+- `m::Real(3)` : The number of standard deviations to each side the process should span
+- `N::Integer(9)`: Number of states in markov process
+
+##### Returns
+
+- `P::Matrix` : Transition matrix where P(i,j) denotes probability of going from state i to state j
+- `s::StepRangeLen` : Discretized grid of AR(1) process according to Markov chain states
+"""
+function tauchen(ρ::Real,σ::Real,m::Real=3,N::Integer=9)
     
-    Π = zeros(N,N);
+    # Check if abs(ρ)<1 
+    abs(ρ)>=1 &&  
+        throw(ArgumentError("Persistence parameter ρ must be smaller than 1"))
+    
+    P = zeros(N,N);
     dist = Normal(0,σ);   # we use normal distribution with mu=0 for u_t
     
-    
     # discretize the state space
-    stvy = sqrt(σ^2/(1-ρ^2));   # standard deviation of y_t
-    ymax = m*stvy;                    # upper boundary of state space
-    ymin = -ymax;                     # lower boundary of state space
-    w = (ymax-ymin)/(N-1);            # length of interval 
-    s = ymin:w:ymax;                  # the discretized state space
+    stvy = sqrt(σ^2/(1-ρ^2));       # standard deviation of y_t
+    ymax = m*stvy;                  # upper boundary of state space
+    ymin = -ymax;                   # lower boundary of state space
+    w = (ymax-ymin)/(N-1);          # length of interval 
+    s = range(ymin,ymax,N);         # the discretized state space
     
     # calculate the transition matrix
     for j=1:N
         for k=2:N-1
-            Π[j,k]= cdf(dist,s[k]-ρ*s[j]+w/2) - cdf(dist,s[k]-ρ*s[j]-w/2);
+            P[j,k]= cdf(dist,s[k]-ρ*s[j]+w/2) - cdf(dist,s[k]-ρ*s[j]-w/2);
         end
-        Π[j,1] = cdf(dist,s[1]-ρ*s[j]+w/2);
-        Π[j,N] = 1 - cdf(dist,s[N]-ρ*s[j]-w/2);
+        P[j,1] = cdf(dist,s[1]-ρ*s[j]+w/2);
+        P[j,N] = 1 - cdf(dist,s[N]-ρ*s[j]-w/2);
     end
 
-    return (; Π,s)
+    return (; P,s)
 
     # Check for correct Transition matrix
-    if any(abs.(sum(Π,dims=2).-1) .> 1e-10)
-        str = findall(>(1e-10),vec(abs.(sum(Π,dims=2).-1)));  # find rows not adding up to one
-        println("error in transition matrix")
-        println("rows $str do not sum to one")
-    end
+    !is_stochastic(P) &&
+        println("Problem in Transition matrix: Rows do not sum to 1!")
     
 end
     
     
+"""
+Implements Rouwenhorst's (1995) method for approximating AR(1) process with finite markov chain
 
-function rouwenhorst(ρ,σ,N)
+The process follows
+
+```math
+    y_t = ρ y_{t-1} + ε_t
+```
+
+where ``ε_t ∼ N (0,σ^2)``
+
+##### Arguments
+
+- `ρ::Real` : Persistence parameter in AR(1) process
+- `σ::Real` : Standard deviation of random component of AR(1) process
+- `N::Integer`: Number of states in markov process
+
+##### Returns
+
+- `P::Matrix` : Transition matrix where P(i,j) denotes probability of going from state i to state j
+- `s::StepRangeLen` : Discretized grid of AR(1) process according to Markov chain states
+"""
+function rouwenhorst(ρ::Real,σ::Real,N::Integer)
 # Use Rouwenhorst's (1995) method
 
     # discretize the state space
-    stvy = sqrt(σ^2/(1-ρ^2)); # standard deviation of y_t
+    stvy = sqrt(σ^2/(1-ρ^2));          # standard deviation of y_t
     ymax = sqrt(N-1)*stvy;             # upper boundary of state space
-    ymin = -ymax;                      # lower boundary of state space
-    w = (ymax-ymin)/(N-1);             # length of interval 
-    s = ymin:w:ymax;                   # the discretized state space
+    s = range(-ymax, ymax,N );         # the discretized state space
     
     # calculate the transition matrix
     p       = (1+ρ)/2;
     q       = p;
-    Omega0  = [p 1-p; 1-q q];
+    P  = [p 1-p; 1-q q];
     
-    for i = 3:N
-        zero        = zeros(i-1,1);
-        OmegaNew    = p.*[Omega0 zero; zero' 0] + (1-p).*[zero Omega0; 0 zero']+(1-q).*[zero' 0; Omega0 zero] + q.*[0 zero'; zero Omega0];
-        Omega0      = OmegaNew;
-        Omega0[2:end-1,:] = Omega0[2:end-1,:]./2;
+    @inbounds for i = 3:N
+        zero = zeros(i-1,1);
+        P = p.*[P zero; zero' 0] + (1-p).*[zero P; 0 zero']+(1-q).*[zero' 0; P zero] + q.*[0 zero'; zero P];
+        P[2:end-1,:] = P[2:end-1,:]./2;
     end
     
-    Π = Omega0;
-    
-    # Check for correct transition matrix
-    if any(abs.(sum(Π,dims=2).-1) .> 1e-10)
-        str = findall(>(1e-10),vec(abs.(sum(Π,dims=2).-1)));  # find rows not adding up to one
-        println("error in transition matrix")
-        println("rows $str do not sum to one")
-    end
+    # Check for correct Transition matrix
+    !is_stochastic(P) &&
+        println("Problem in Transition matrix: Rows do not sum to 1!")
 
-return (; Π,s)
+return (; P,s)
 
 end
 
-function inv_distr(Π)
+
+"""
+Computes the stationary distribution of an irreducible Markov
+transition matrix P (stochastic matrix where rows sum to one).
+
+Specifically, computes vector μ with 
+
+```math
+    μ * P = μ
+```
+
+and `` sum(μ) = 1 ``
+
+Method: Comupute normalized eigenvector corresponding to left-eigenvector λ=1
+
+##### Arguments
+
+- `P::Matrix{T}` : Stochastic matrix of size n x n, elements must be non-negative and rows must sum to 1.
+
+##### Returns
+
+- `μ::Vector{T}` : stationary distribution of ``P``.
+"""
+function stationary_distr(P::Matrix{<:Real})
+
+    # Check for correct Transition matrix
+    !is_stochastic(P) && 
+        throw(ArgumentError("Non-stochastic transition matrix provided"))
     
-    # Calculate invariant distribution over states
-    V = eigvals(Π');
-    Σ = eigvecs(Π');
-    InvD = [];
-    for i in eachindex(V)
-        if (abs(V[i]-1)<1e-14)
-            InvD = Σ[:,i]/sum(Σ[:,i]);
-        end
-    end
-    return (; InvD)
+    # find an eigenvector x corresponding to eigenvalue λ = 1,
+    # normalized so that the first component is 1
+    A = P'
+    μ = [1; (I - A[2:end,2:end]) \ Vector(A[2:end,1])]
+    μ /= sum(μ)
+    return μ
 end
 
-function inv_distr2(Π)
-    
-    # Calculate invariant distribution over states
-    InvD = Π^100
 
-    return(; InvD)
-end
-       
        
     
