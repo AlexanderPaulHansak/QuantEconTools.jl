@@ -14,7 +14,7 @@ import LinearAlgebra: I
 @inline is_stochastic(P) = maximum(abs, sum(P, dims = 2) .- 1) < 5e-15 ? true : false
 
 """
-Implements Tauchen's (1996) method for approximating AR(1) process with finite markov chain
+Implements Tauchen's (1986) method for approximating AR(1) process with finite markov chain
 
 The process follows
 
@@ -22,13 +22,13 @@ The process follows
     y_t = ρ y_{t-1} + ε_t
 ```
 
-where ``ε_t ∼ N (0,σ^2)``
+where ``ε_t ∼ N(0,σ^2)``
 
 ##### Arguments
 
 - `ρ::Real` : Persistence parameter in AR(1) process
 - `σ::Real` : Standard deviation of random component of AR(1) process
-- `m::Real(3)` : The number of standard deviations to each side the process should span
+- `m::Real(3)` : The number of standard deviations the process should span to each side
 - `N::Integer(9)`: Number of states in markov process
 
 ##### Returns
@@ -43,22 +43,25 @@ function tauchen(ρ::Real,σ::Real,m::Real=3,N::Integer=9)
         throw(ArgumentError("Persistence parameter ρ must be smaller than 1"))
     
     P = zeros(N,N);
-    dist = Normal(0,σ);   # we use normal distribution with mu=0 for u_t
-    
+    norm_cdf(x) = cdf(Normal(0,σ),x)  # we use normal distribution with mean zero
+
     # discretize the state space
-    stvy = sqrt(σ^2/(1-ρ^2));       # standard deviation of y_t
-    ymax = m*stvy;                  # upper boundary of state space
-    ymin = -ymax;                   # lower boundary of state space
-    w = (ymax-ymin)/(N-1);          # length of interval 
-    s = range(ymin,ymax,N);         # the discretized state space
+    stvy = sqrt(σ^2/(1-ρ^2))       # standard deviation of y_t
+    ymax = m*stvy                  # upper boundary of state space
+    ymin = -ymax                   # lower boundary of state space
+    w = (ymax-ymin)/(N-1)          # length of interval 
+    s = range(ymin,ymax,N)         # the discretized state space
     
     # calculate the transition matrix
-    for j=1:N
-        for k=2:N-1
-            P[j,k]= cdf(dist,s[k]-ρ*s[j]+w/2) - cdf(dist,s[k]-ρ*s[j]-w/2);
+    for row = 1:N
+
+        for col = 2:N-1
+            P[row,col]= norm_cdf(s[col]-ρ*s[row]+w/2) -
+                        norm_cdf(s[col]-ρ*s[row]-w/2)
         end
-        P[j,1] = cdf(dist,s[1]-ρ*s[j]+w/2);
-        P[j,N] = 1 - cdf(dist,s[N]-ρ*s[j]-w/2);
+
+        P[row,1] = norm_cdf(s[1]-ρ*s[row]+w/2);
+        P[row,N] = 1 - norm_cdf(s[N]-ρ*s[row]-w/2)
     end
 
     return (; P,s)
@@ -93,31 +96,41 @@ where ``ε_t ∼ N (0,σ^2)``
 - `s::StepRangeLen` : Discretized grid of AR(1) process according to Markov chain states
 """
 function rouwenhorst(ρ::Real,σ::Real,N::Integer)
-# Use Rouwenhorst's (1995) method
+
+    # Check if abs(ρ)<1 
+    abs(ρ)>=1 &&  
+        throw(ArgumentError("Persistence parameter ρ must be smaller than 1"))
 
     # discretize the state space
-    stvy = sqrt(σ^2/(1-ρ^2));          # standard deviation of y_t
-    ymax = sqrt(N-1)*stvy;             # upper boundary of state space
-    s = range(-ymax, ymax,N );         # the discretized state space
+    stvy = σ/sqrt(1-ρ^2)       # standard deviation of y_t
+    ymax = sqrt(N-1)*stvy      # upper boundary of state space
+    s = range(-ymax, ymax,N)   # the discretized state space
     
-    # calculate the transition matrix
-    p       = (1+ρ)/2;
-    q       = p;
-    P  = [p 1-p; 1-q q];
+    # The initial transition matrix for N=2
+    p  = (1+ρ)/2
+    q  = p
+    P  = [p 1-p; 1-q q]
     
-    @inbounds for i = 3:N
-        zero = zeros(i-1,1);
-        P = p.*[P zero; zero' 0] + (1-p).*[zero P; 0 zero']+(1-q).*[zero' 0; P zero] + q.*[0 zero'; zero P];
-        P[2:end-1,:] = P[2:end-1,:]./2;
+    # Recursively calculate the transition matrix for n > 2
+    for n = 2:N-1
+        P_old = P
+        P = fill(0.,(n+1,n+1))
+        P[1:n, 1:n]         = p*P_old
+        P[1:n, 2:(n+1)]     .+= (1-p)*P_old
+        P[2:(n+1), 1:n]     .+= (1-q)*P_old
+        P[2:(n+1), 2:(n+1)] .+= q*P_old
+
+        P[2:end-1,:] ./= 2
     end
     
     # Check for correct Transition matrix
     !is_stochastic(P) &&
         println("Problem in Transition matrix: Rows do not sum to 1!")
 
-return (; P,s)
+    return (; P,s)
 
 end
+
 
 
 """
