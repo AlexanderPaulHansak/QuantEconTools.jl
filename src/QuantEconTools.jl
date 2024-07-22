@@ -2,7 +2,7 @@ module QuantEconTools
 
 export 
     # Markov functionality
-    tauchen, rouwenhorst, stationary_distr
+    tauchen, rouwenhorst, stationary_distr,
 
     # Utility function
     AbstractUtility, LogUtility, CRRAUtility, derivative,
@@ -10,4 +10,4 @@ export
 include("MarkovApprox.jl")
 include("utility.jl")
 
-end # end module
+end # module
