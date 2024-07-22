@@ -13,15 +13,13 @@ u(c) = log(c)
 
 Additionally, this code assumes that if c < 1e-10 then
 
-u(c) = log(1e-10) + 1e10*(c - 1e-10)
+u(c) = -10e18
 
 """
 struct LogUtility <: AbstractUtility end
 
-LogUtility() = LogUtility(1.0)
-
 (u::LogUtility)(c::Float64) =
-    c > 1e-10 ? log(c) : (log(1e-10) + 1e10*(c - 1e-10))
+    c > 1e-10 ? log(c) : -1e18
 derivative(u::LogUtility, c::Float64) =
     c > 1e-10 ? 1 / c : 1e10
 
@@ -32,7 +30,7 @@ u(c) = c^(1 - γ) / (1 - γ)
 
 Additionally, this code assumes that if c < 1e-10 then
 
-u(c) = (1e-10^(1 - γ) / (1 - γ) + 1e-10^(-γ) * (c - 1e-10))
+u(c) = -10e18
 """
 struct CRRAUtility <: AbstractUtility
     γ::Float64
