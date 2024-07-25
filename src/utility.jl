@@ -44,7 +44,7 @@ struct CRRAUtility <: AbstractUtility
     end
 end
 
-(u::CRRAUtility)(c::Float64) =
+(u::CRRAUtility)(c::Real) =
     c > 1e-10 ?
            (c^(1.0 - u.γ) - 1.0) / (1.0 - u.γ) : -1e18
 derivative(u::CRRAUtility, c::Float64) =
