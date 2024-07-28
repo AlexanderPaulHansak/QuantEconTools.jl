@@ -51,7 +51,7 @@ derivative(u::CRRAUtility, c::Float64) =
     c > 1e-10 ? c^(-u.γ) : 1e-10^(-u.γ)
 
 
-    # Labor Utility
+# Labor Utility
 
 """
 Type used to evaluate constant Frisch elasticity (CFE) utility. CFE
