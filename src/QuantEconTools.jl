@@ -5,7 +5,7 @@ export
     tauchen, rouwenhorst, stationary_distr,
 
     # Utility function
-    AbstractUtility, LogUtility, CRRAUtility, derivative
+    AbstractUtility, LogUtility, CRRAUtility, CFEUtility, derivative
 
 include("MarkovApprox.jl")
 include("utility.jl")
